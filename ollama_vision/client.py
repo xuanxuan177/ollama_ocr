@@ -1,5 +1,4 @@
 # ollama_vision/client.py
-"""Ollama视觉模型客户端模块"""
 
 import requests
 import json
@@ -36,13 +35,18 @@ class OllamaVisionClient:
     def _make_request(
             self,
             endpoint: str,
-            data: Dict,
+            data: Optional[Dict] = None,
+            method: str = "POST",
             stream: bool = True
     ) -> requests.Response:
-        """发送POST请求到指定的endpoint"""
+        """发送HTTP请求到指定的endpoint"""
         url = f"{self.base_url}/{endpoint}"
         try:
-            response = requests.post(url, json=data, stream=stream)
+            if method == "GET":
+                response = requests.get(url)
+            else:
+                response = requests.post(url, json=data, stream=stream)
+
             if not response.ok:
                 error_msg = response.text
                 try:
@@ -55,6 +59,39 @@ class OllamaVisionClient:
             return response
         except requests.RequestException as e:
             raise APIError(f"请求失败: {str(e)}")
+
+    def get_models(self) -> List[str]:
+        """
+        获取当前安装的模型列表
+
+        Returns:
+            支持vision功能的模型名称列表
+        """
+        try:
+            response = self._make_request("api/tags", method="GET")
+            data = response.json()
+
+            # 过滤出支持vision的模型
+            vision_models = []
+            for model in data.get('models', []):
+                name = model.get('name', '')
+                # 检查模型名称中的关键词判断是否支持vision
+                if any(kw in name.lower() for kw in ['vision', 'visual', 'vit', 'clip']):
+                    vision_models.append(name)
+
+            return vision_models
+
+        except Exception as e:
+            raise APIError(f"获取模型列表失败: {str(e)}")
+
+    def set_model(self, model_name: str):
+        """
+        切换使用的模型
+
+        Args:
+            model_name: 模型名称
+        """
+        self.model = model_name
 
     def chat(
             self,
